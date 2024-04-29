@@ -116,20 +116,56 @@ class LongerBitSet
 
 class Parser
 {
+
     public int parseLine(String line) {
-        String[] octets = line.split("\\.");
-        if(octets.length != 4) throw new RuntimeException("Invalid line \"" + line + "\"");
 
-        int b0 = octetToByte(octets[0]);
-        int b1 = octetToByte(octets[1]);
-        int b2 = octetToByte(octets[2]);
-        int b3 = octetToByte(octets[3]);
+        try {
+            int res = 0;
 
-        return (b0 << 24) | (b1 << 16) | (b2 << 8) | (b3 << 0);
+            int tmpValue = 0;
+
+            int currByte = 3;
+            boolean newOctet = true;
+            int len = line.length();
+
+            for (int i = 0; i < len; i++) {
+                char c = line.charAt(i);
+                if (c == '.') {
+                    res = addByteToRes(newOctet, tmpValue, currByte, res);
+
+                    currByte--;
+                    tmpValue = 0;
+                    newOctet = true;
+                } else {
+                    int digit = Character.digit(c, 10);
+                    if (digit < 0) {
+                        throw new RuntimeException();
+                    }
+
+                    tmpValue *= 10;
+                    tmpValue += digit;
+                    newOctet = false;
+                }
+            }
+
+            res = addByteToRes(newOctet, tmpValue, currByte, res);
+
+            return res;
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Invalid line " + line);
+        }
     }
 
-    private int octetToByte(String octet) {
-        return Integer.parseInt(octet);
+    private static int addByteToRes(boolean newOctet, int tmpValue, int currByte, int res) {
+        if (newOctet || tmpValue < 0L || tmpValue > 255L || currByte < 0) {
+            throw new RuntimeException();
+        }
+
+        int addition = tmpValue << (8* currByte);
+        res |= addition;
+        return res;
     }
 }
 
