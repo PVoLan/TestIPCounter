@@ -34,23 +34,63 @@ public class Main
     private static void doRead(String fileName, LongerBitSet bitset) {
         System.out.println("File to read: " + fileName);
 
-        try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+        try (InputStream inputStream = new FileInputStream(fileName)) {
 
             Parser parser = new Parser();
-            String line;
             long lineCounter = 0;
 
-            while ((line = br.readLine()) != null) {
-                if(line.isEmpty()) continue;
-                //System.out.println("Parsing line " + line);
-                int ip = parser.parseLine(line);
-                //System.out.println(String.format("Parsed into %08x", ip));
-                bitset.set(ip, true);
+            int bufSizeToRead = 50;
+            int bufSizeMaxRemainder = 20;
+            byte[] buffer1 = new byte[bufSizeToRead + bufSizeMaxRemainder];
+            byte[] buffer2 = new byte[bufSizeToRead + bufSizeMaxRemainder];
 
-                lineCounter++;
-                if(lineCounter % 10000000 == 0) {
-                    System.out.println("Parsed " + lineCounter + " lines");
+            byte[] currentBuffer = buffer1;
+            byte[] anotherBuffer = buffer2;
+            int currentRemainderSize = 0;
+
+            ParserOutput parserOutput = new ParserOutput();
+
+            while (true) {
+
+                boolean lastIteration = false;
+                int bytesRead = inputStream.read(currentBuffer, currentRemainderSize, bufSizeToRead);
+                //System.out.println("New bytes read: " + bytesRead);
+                if(bytesRead == -1){
+                    lastIteration = true;
+                    bytesRead = 0;
                 }
+                int bytesAvailable = currentRemainderSize + bytesRead;
+
+                int currentBufferOffset = 0;
+                while (true){
+                    parser.parseLine(currentBuffer, currentBufferOffset, bytesAvailable, parserOutput);
+                    //System.out.println(String.format("Parsed line \"%08x\", bytespassed=%d, nothingToParse=%s", parserOutput.result, parserOutput.bytesPassed, parserOutput.nothingToParse));
+
+                    currentBufferOffset += parserOutput.bytesPassed;
+                    if(parserOutput.nothingToParse) break;
+                    if(parserOutput.emptyLine) {
+                        continue;
+                    }
+
+                    bitset.set(parserOutput.result, true);
+
+                    lineCounter++;
+                    if(lineCounter % 10000000 == 0) {
+                        System.out.println("Parsed " + lineCounter + " lines");
+                    }
+                }
+
+                if(lastIteration) break;
+
+                int remainderLen = bytesAvailable - currentBufferOffset;
+                System.arraycopy(currentBuffer, currentBufferOffset, anotherBuffer, 0, remainderLen);
+
+                currentRemainderSize = remainderLen;
+
+                //Swap buffers
+                byte[] tmp = currentBuffer;
+                currentBuffer = anotherBuffer;
+                anotherBuffer = tmp;
             }
 
         } catch (IOException e){
@@ -59,6 +99,7 @@ public class Main
 
         System.out.println("File read completed");
     }
+
 
 
     private static void doEmptyRead(String fileName) {
@@ -137,49 +178,101 @@ class LongerBitSet
 }
 
 
+class ParserOutput{
+    int result;
+    int bytesPassed;
+    boolean nothingToParse;
+    boolean emptyLine;
+}
 
 class Parser
 {
+    byte DOT = 0x2E;
+    byte D0 = 0x30;
+    byte D1 = 0x31;
+    byte D2 = 0x32;
+    byte D3 = 0x33;
+    byte D4 = 0x34;
+    byte D5 = 0x35;
+    byte D6 = 0x36;
+    byte D7 = 0x37;
+    byte D8 = 0x38;
+    byte D9 = 0x39;
+    byte CR = 0x0D;
+    byte LF = 0x0A;
 
-    public int parseLine(String line) {
 
-        try {
-            int res = 0;
+    public void parseLine(byte[] buffer, int offset, int bytesAvailable, ParserOutput parserOutput){
 
-            int tmpValue = 0;
+        int res = 0;
 
-            int currByte = 3;
-            boolean newOctet = true;
-            int len = line.length();
+        int tmpValue = 0;
 
-            for (int i = 0; i < len; i++) {
-                char c = line.charAt(i);
-                if (c == '.') {
-                    res = addByteToRes(newOctet, tmpValue, currByte, res);
+        int currByte = 3;
+        boolean newOctet = true;
 
-                    currByte--;
-                    tmpValue = 0;
-                    newOctet = true;
-                } else {
-                    int digit = Character.digit(c, 10);
-                    if (digit < 0) {
-                        throw new RuntimeException();
-                    }
+        int currentOffset = offset;
 
-                    tmpValue *= 10;
-                    tmpValue += digit;
-                    newOctet = false;
-                }
+
+        while (true) {
+
+            if(currentOffset >= bytesAvailable){
+
+                parserOutput.result = 0;
+                parserOutput.nothingToParse = true;
+                parserOutput.bytesPassed = 0;
+                parserOutput.emptyLine = false;
+
+                return;
             }
 
-            res = addByteToRes(newOctet, tmpValue, currByte, res);
+            byte b = buffer[currentOffset];
 
-            return res;
+            //Note that CR+LF combinations will provide fake empty "lines", but this is not a big issue for us
+            if (b == CR || b == LF){
+                int bytesPassed = currentOffset - offset + 1;
+
+                res = addByteToRes(newOctet, tmpValue, currByte, res);
+
+                parserOutput.result = res;
+                parserOutput.nothingToParse = false;
+                parserOutput.bytesPassed = bytesPassed;
+                parserOutput.emptyLine = bytesPassed == 1;
+
+                return;
+            }
+
+            if (b == DOT) {
+                res = addByteToRes(newOctet, tmpValue, currByte, res);
+
+                currByte--;
+                tmpValue = 0;
+                newOctet = true;
+            } else {
+                int digit = byteToDigit(b);
+
+                tmpValue *= 10;
+                tmpValue += digit;
+                newOctet = false;
+            }
+
+            currentOffset++;
         }
-        catch (Exception e)
-        {
-            throw new RuntimeException("Invalid line " + line);
-        }
+    }
+
+    private int byteToDigit(byte b) {
+        //Maybe return (b-D0) would work faster, not sure
+        if(b == D0) return 0;
+        if(b == D1) return 1;
+        if(b == D2) return 2;
+        if(b == D3) return 3;
+        if(b == D4) return 4;
+        if(b == D5) return 5;
+        if(b == D6) return 6;
+        if(b == D7) return 7;
+        if(b == D8) return 8;
+        if(b == D9) return 9;
+        throw new RuntimeException("Invalid byte " + b);
     }
 
     private static int addByteToRes(boolean newOctet, int tmpValue, int currByte, int res) {
