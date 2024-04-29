@@ -38,11 +38,15 @@ public class Main
 
             while ((line = br.readLine()) != null) {
                 if(line.isEmpty()) continue;
-                System.out.println("Parsing line " + line);
+                //System.out.println("Parsing line " + line);
                 int ip = parser.parseLine(line);
-                System.out.println(String.format("Parsed into %08x", ip));
+                //System.out.println(String.format("Parsed into %08x", ip));
                 bitset.set(ip, true);
+
                 lineCounter++;
+                if(lineCounter % 1000000 == 0) {
+                    System.out.println("Parsed " + lineCounter + " lines");
+                }
             }
 
         } catch (IOException e){
