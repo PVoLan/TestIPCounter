@@ -1,8 +1,6 @@
 package ru.pvolan.ipcounter;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.BitSet;
 
 public class Main
@@ -11,10 +9,16 @@ public class Main
         System.out.println("IPCounter start");
 
         StopWatch totalStopWatch = new StopWatch();
-        StopWatch parsingStopWatch = new StopWatch();
         LongerBitSet bitset = new LongerBitSet();
 
         String fileName = ArgsHelper.getFileNameFromArgs(args);
+
+
+        StopWatch emptyReadStopWatch = new StopWatch();
+        doEmptyRead(fileName);
+        System.out.println("IPCounter - emptyRead done in " + emptyReadStopWatch.measure() + " ms");
+
+        StopWatch parsingStopWatch = new StopWatch();
         doRead(fileName, bitset);
         System.out.println("IPCounter - parsing done in " + parsingStopWatch.measure() + " ms");
 
@@ -54,6 +58,26 @@ public class Main
         }
 
         System.out.println("File read completed");
+    }
+
+
+    private static void doEmptyRead(String fileName) {
+        System.out.println("File to do empty read: " + fileName);
+
+        try {
+            InputStream is = new FileInputStream(fileName);
+            long totalRead = 0;
+
+            byte[] buffer = new byte[10240];
+            for (int length; (length = is.read(buffer)) != -1; ) {
+                totalRead += length;
+            }
+
+            System.out.println("Read " + totalRead + " bytes");
+
+        } catch (IOException e) {
+            throw new RuntimeException(e.getMessage(), e);
+        }
     }
 
 
