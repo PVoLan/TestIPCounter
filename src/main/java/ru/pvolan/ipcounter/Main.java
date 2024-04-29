@@ -39,7 +39,7 @@ public class Main
             Parser parser = new Parser();
             long lineCounter = 0;
 
-            int bufSizeToRead = 50;
+            int bufSizeToRead = 102400;
             int bufSizeMaxRemainder = 20;
             byte[] buffer1 = new byte[bufSizeToRead + bufSizeMaxRemainder];
             byte[] buffer2 = new byte[bufSizeToRead + bufSizeMaxRemainder];
