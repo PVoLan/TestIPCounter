@@ -44,7 +44,7 @@ public class Main
                 bitset.set(ip, true);
 
                 lineCounter++;
-                if(lineCounter % 1000000 == 0) {
+                if(lineCounter % 10000000 == 0) {
                     System.out.println("Parsed " + lineCounter + " lines");
                 }
             }
